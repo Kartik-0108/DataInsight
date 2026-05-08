@@ -12,7 +12,7 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    buildCommand: "./render_build.sh"
+    buildCommand: "sed -i 's/\\r$//' render_build.sh && bash render_build.sh"
     startCommand: "cd backend && gunicorn auto_data_insights_generator.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
       - key: DATABASE_URL
