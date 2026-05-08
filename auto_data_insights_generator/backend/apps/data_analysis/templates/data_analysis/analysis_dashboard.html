@@ -1,0 +1,758 @@
+{% extends 'base.html' %}
+{% block title %}Analysis Dashboard - {{ dataset.name }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div class="header-left">
+            <a href="{% url 'data_upload:upload' %}" class="btn btn-ghost">← Back</a>
+            <div>
+                <h1>📊 Analysis Dashboard</h1>
+                <p>{{ dataset.name }} — {{ dataset.row_count }} rows × {{ dataset.column_count }} columns</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="run-analysis-btn" class="btn btn-primary" onclick="runAnalysis({{ dataset.id }})">
+                🔬 Run Analysis
+            </button>
+            <a href="{% url 'ai_insights:insights' dataset.id %}" class="btn btn-secondary">🤖 AI Insights</a>
+            <a href="{% url 'reports:generate' dataset.id %}" class="btn btn-accent">📄 Generate Report</a>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display:none;">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Analyzing your data...</p>
+        </div>
+    </div>
+
+    <!-- Summary Section — Enhanced Rich View -->
+    <div id="summary-section" class="glass-card summary-card" style="display:none;">
+        <h2>📋 Analysis Summary</h2>
+        <div id="analysis-summary" class="summary-rich"></div>
+    </div>
+
+    <!-- Key Findings Panel -->
+    <div id="findings-section" class="glass-card key-findings" style="display:none;">
+        <h2>💡 Key Findings</h2>
+        <div id="key-findings" class="findings-list"></div>
+    </div>
+
+    <!-- Stats Cards Row -->
+    <div id="stats-cards" class="stats-grid" style="display:none;"></div>
+
+    <!-- Numeric Statistics Table -->
+    <div id="numeric-stats-section" class="glass-card numeric-stats-section" style="display:none;">
+        <h2>📐 Numeric Statistics</h2>
+        <div class="numeric-table-wrap">
+            <table class="numeric-table" id="numeric-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Mean</th>
+                        <th>Median</th>
+                        <th>Std Dev</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                        <th>Range</th>
+                    </tr>
+                </thead>
+                <tbody id="numeric-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-grid">
+        <!-- Scatter Plot -->
+        <div id="scatter-section" class="glass-card chart-card" style="display:none;">
+            <h3>🔵 Scatter Plot</h3>
+            <div class="chart-selector">
+                <select id="scatter-select" onchange="updateScatterPlot()" class="form-control"></select>
+            </div>
+            <div class="chart-container">
+                <canvas id="scatter-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Correlation Heatmap -->
+        <div id="correlation-section" class="glass-card chart-card" style="display:none;">
+            <h3>🔗 Correlation Heatmap</h3>
+            <div id="heatmap-container" class="heatmap-container"></div>
+            <div id="top-correlations" class="correlations-list"></div>
+        </div>
+
+        <!-- Box Plot -->
+        <div id="box-section" class="glass-card chart-card" style="display:none;">
+            <h3>📦 Box Plot Summary</h3>
+            <div id="box-container" class="box-plot-grid"></div>
+        </div>
+
+        <!-- Distribution Charts -->
+        <div id="distribution-section" class="glass-card chart-card" style="display:none;">
+            <h3>📉 Distribution Analysis</h3>
+            <div class="chart-selector">
+                <select id="dist-column-select" onchange="updateDistChart()" class="form-control"></select>
+            </div>
+            <div class="chart-container">
+                <canvas id="distribution-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Trend Charts -->
+        <div id="trend-section" class="glass-card chart-card" style="display:none;">
+            <h3>📈 Trend Analysis</h3>
+            <div class="chart-selector">
+                <select id="trend-column-select" onchange="updateTrendChart()" class="form-control"></select>
+            </div>
+            <div class="chart-container">
+                <canvas id="trend-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Outlier Section -->
+        <div id="outlier-section" class="glass-card chart-card" style="display:none;">
+            <h3>⚠️ Outlier Detection</h3>
+            <div id="outlier-details" class="outlier-grid"></div>
+        </div>
+
+        <!-- Missing Data -->
+        <div id="missing-section" class="glass-card chart-card" style="display:none;">
+            <h3>📋 Data Quality</h3>
+            <div class="chart-container">
+                <canvas id="missing-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matplotlib Plots Gallery -->
+    <div id="matplotlib-section" class="glass-card" style="display:none;margin-top:2rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
+            <h2 style="margin:0;">🖼️ Matplotlib Visualizations</h2>
+            <span id="matplotlib-plot-count" style="font-size:0.85rem;color:#94a3b8;"></span>
+        </div>
+        <div id="matplotlib-plots-grid" class="matplotlib-grid"></div>
+    </div>
+
+    <!-- Lightbox overlay -->
+    <div id="plot-lightbox" onclick="closeLightbox()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
+        <img id="lightbox-img" src="" style="max-width:92vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 48px rgba(0,0,0,0.7);" />
+        <div id="lightbox-caption" style="position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);color:#e2e8f0;font-size:0.95rem;background:rgba(15,15,26,0.8);padding:6px 18px;border-radius:20px;"></div>
+    </div>
+</div>
+
+<style>
+.heatmap-container { overflow-x: auto; margin: 10px 0; }
+.heatmap-table { border-collapse: collapse; width: 100%; }
+.heatmap-table th, .heatmap-table td {
+    padding: 6px 10px; text-align: center; font-size: 0.75rem;
+    border: 1px solid rgba(148,163,184,0.15);
+}
+.heatmap-table th {
+    background: rgba(99,102,241,0.15); color: #c4b5fd;
+    font-weight: 600; white-space: nowrap;
+}
+.box-plot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.box-card {
+    background: rgba(99,102,241,0.08); border-radius: 10px;
+    padding: 14px; border: 1px solid rgba(99,102,241,0.2);
+}
+.box-card h4 { margin: 0 0 8px; color: #c4b5fd; font-size: 0.85rem; }
+.box-card .stat-row { display: flex; justify-content: space-between; font-size: 0.78rem; color: #94a3b8; margin: 3px 0; }
+.box-card .stat-row .val { color: #e2e8f0; font-weight: 600; }
+.box-bar-container { margin: 8px 0; height: 18px; background: rgba(15,23,42,0.4); border-radius: 8px; position: relative; overflow: hidden; }
+.box-bar { position: absolute; height: 100%; background: linear-gradient(90deg, #6366f1, #22d3ee); border-radius: 8px; }
+.box-bar-median { position: absolute; width: 2px; height: 100%; background: #f472b6; z-index: 2; }
+
+/* Matplotlib gallery */
+.matplotlib-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.2rem;
+}
+.mpl-plot-card {
+    background: rgba(99,102,241,0.07);
+    border: 1px solid rgba(99,102,241,0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+    cursor: zoom-in;
+}
+.mpl-plot-card:hover {
+    transform: translateY(-4px) scale(1.015);
+    box-shadow: 0 12px 36px rgba(99,102,241,0.28);
+}
+.mpl-plot-card img {
+    width: 100%; display: block;
+    border-bottom: 1px solid rgba(99,102,241,0.18);
+}
+.mpl-plot-label {
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: #c4b5fd;
+    font-weight: 600;
+    text-transform: capitalize;
+    letter-spacing: 0.03em;
+}
+.mpl-plot-error {
+    padding: 1rem;
+    color: #f87171;
+    font-size: 0.85rem;
+    background: rgba(239,68,68,0.08);
+    border-radius: 10px;
+    border: 1px solid rgba(239,68,68,0.2);
+}
+</style>
+
+<script>
+const DATASET_ID = {{ dataset.id }};
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetch(`/analysis/${DATASET_ID}/api/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                renderAnalysis(data);
+                if (data.matplotlib_plots) renderMatplotlibPlots(data.matplotlib_plots);
+            }
+        })
+        .catch(() => {});
+});
+
+function runAnalysis(datasetId) {
+    const btn = document.getElementById('run-analysis-btn');
+    const loading = document.getElementById('loading-overlay');
+    btn.disabled = true; btn.innerHTML = '⏳ Analyzing...'; loading.style.display = 'flex';
+
+    fetch(`/analysis/${datasetId}/run/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        loading.style.display = 'none'; btn.disabled = false; btn.innerHTML = '🔬 Run Analysis';
+        if (data.status === 'success') renderAnalysis(data);
+        else showToast('Error: ' + (data.message || 'Analysis failed'), 'error');
+    })
+    .catch(() => {
+        loading.style.display = 'none'; btn.disabled = false; btn.innerHTML = '🔬 Run Analysis';
+        showToast('Network error.', 'error');
+    });
+}
+
+function renderAnalysis(data) {
+    renderRichSummary(data.results);
+    renderKeyFindings(data.results);
+    renderStatsCards(data.results);
+    renderNumericTable(data.results);
+    if (data.charts) {
+        renderScatterPlot(data.charts);
+        renderHeatmap(data.charts, data.results);
+        renderBoxPlots(data.charts);
+        renderDistributionCharts(data.charts);
+        renderTrendCharts(data.charts);
+        renderOutlierDetails(data.results);
+        renderMissingDataChart(data.results);
+    }
+    if (data.matplotlib_plots) renderMatplotlibPlots(data.matplotlib_plots);
+}
+
+// ─── Rich Summary ───
+function renderRichSummary(results) {
+    const container = document.getElementById('analysis-summary');
+    const stats = results.descriptive_stats || {};
+    const shape = stats.shape || {};
+    const missing = results.missing_data || {};
+    const outliers = results.outliers?.isolation_forest || {};
+    const trends = results.trends || {};
+    const correlation = results.correlation || {};
+    const numericCols = Object.keys(stats.numeric || {}).length;
+    const catCols = Object.keys(stats.categorical || {}).length;
+
+    // Data quality label
+    const completeness = missing.completeness || 100;
+    let qualityLabel, qualityClass;
+    if (completeness >= 98) { qualityLabel = 'Excellent'; qualityClass = 'excellent'; }
+    else if (completeness >= 90) { qualityLabel = 'Good'; qualityClass = 'good'; }
+    else if (completeness >= 75) { qualityLabel = 'Needs Attention'; qualityClass = 'warning'; }
+    else { qualityLabel = 'Poor'; qualityClass = 'danger'; }
+
+    // Trend summary
+    const trendEntries = Object.entries(trends).filter(([,t]) => typeof t === 'object' && t.direction);
+    const increasing = trendEntries.filter(([,t]) => t.direction === 'increasing').length;
+    const decreasing = trendEntries.filter(([,t]) => t.direction === 'decreasing').length;
+
+    // Top correlation
+    const topCorrs = correlation.top_correlations || [];
+    const topCorrText = topCorrs.length > 0
+        ? `${topCorrs[0].col1} ↔ ${topCorrs[0].col2} (${topCorrs[0].value.toFixed(2)})`
+        : 'None found';
+
+    container.innerHTML = `
+        <div class="summary-block">
+            <div class="summary-block-icon">📏</div>
+            <h4>Dataset Size</h4>
+            <div class="value">${(shape.rows||0).toLocaleString()} × ${shape.columns||0}</div>
+            <div class="sub">${numericCols} numeric, ${catCols} categorical columns</div>
+        </div>
+        <div class="summary-block">
+            <div class="summary-block-icon">✅</div>
+            <h4>Data Quality</h4>
+            <div class="value">${completeness}%</div>
+            <div class="sub"><span class="stat-context ${qualityClass}">${qualityLabel}</span></div>
+        </div>
+        <div class="summary-block">
+            <div class="summary-block-icon">🔗</div>
+            <h4>Strongest Correlation</h4>
+            <div class="value" style="font-size:1.1rem">${topCorrText}</div>
+            <div class="sub">${topCorrs.length} significant pair${topCorrs.length !== 1 ? 's' : ''} found</div>
+        </div>
+        <div class="summary-block">
+            <div class="summary-block-icon">📈</div>
+            <h4>Trends Detected</h4>
+            <div class="value">${trendEntries.length}</div>
+            <div class="sub">${increasing} increasing, ${decreasing} decreasing</div>
+        </div>
+        <div class="summary-block">
+            <div class="summary-block-icon">⚡</div>
+            <h4>Outliers</h4>
+            <div class="value">${outliers.total_outliers || 0}</div>
+            <div class="sub">${outliers.percentage ? outliers.percentage + '% of data' : 'via Isolation Forest'}</div>
+        </div>
+        <div class="summary-block">
+            <div class="summary-block-icon">🧩</div>
+            <h4>Missing Cells</h4>
+            <div class="value">${(missing.total_missing_cells||0).toLocaleString()}</div>
+            <div class="sub">out of ${(missing.total_cells||0).toLocaleString()} total cells</div>
+        </div>
+    `;
+    document.getElementById('summary-section').style.display = 'block';
+}
+
+// ─── Key Findings ───
+function renderKeyFindings(results) {
+    const container = document.getElementById('key-findings');
+    const findings = [];
+
+    // Finding 1: Strongest correlation
+    const topCorrs = results.correlation?.top_correlations || [];
+    if (topCorrs.length > 0) {
+        const c = topCorrs[0];
+        const dir = c.value > 0 ? 'positive' : 'negative';
+        findings.push({
+            title: `🔗 ${c.strength} ${dir} correlation between ${c.col1} and ${c.col2}`,
+            text: `These two variables have a correlation coefficient of ${c.value.toFixed(3)}. ${
+                Math.abs(c.value) > 0.7
+                    ? 'This is strong enough to use one variable to predict the other.'
+                    : 'This relationship is notable but should be combined with other factors.'
+            }`
+        });
+    }
+
+    // Finding 2: Biggest outlier column
+    const iqr = results.outliers?.iqr_method || {};
+    const outlierCols = Object.entries(iqr)
+        .filter(([,v]) => typeof v === 'object' && v.count > 0)
+        .sort((a,b) => b[1].percentage - a[1].percentage);
+    if (outlierCols.length > 0) {
+        const [col, info] = outlierCols[0];
+        findings.push({
+            title: `⚡ "${col}" has the most outliers (${info.percentage}%)`,
+            text: `${info.count} data points fall outside the normal range [${info.lower_bound.toFixed(1)} – ${info.upper_bound.toFixed(1)}]. ${
+                info.percentage > 10
+                    ? 'This high rate could indicate data quality issues. Consider investigating.'
+                    : 'This is within an acceptable range for most datasets.'
+            }`
+        });
+    }
+
+    // Finding 3: Steepest trend
+    const trendEntries = Object.entries(results.trends || {})
+        .filter(([,t]) => typeof t === 'object' && t.direction)
+        .sort((a,b) => Math.abs(b[1].slope) - Math.abs(a[1].slope));
+    if (trendEntries.length > 0) {
+        const [col, trend] = trendEntries[0];
+        const emoji = trend.direction === 'increasing' ? '📈' : '📉';
+        findings.push({
+            title: `${emoji} "${col}" shows the steepest ${trend.direction} trend`,
+            text: `With a slope of ${trend.slope.toFixed(4)}, this variable has the strongest directional movement in the dataset. ${
+                trend.direction === 'increasing'
+                    ? 'This upward momentum may indicate growth that warrants monitoring.'
+                    : 'This downward trend should be investigated for root causes.'
+            }`
+        });
+    }
+
+    // Finding 4: Data quality
+    const missing = results.missing_data || {};
+    const missingCols = Object.entries(missing.columns_with_missing || {});
+    if (missingCols.length > 0) {
+        const worst = missingCols.sort((a,b) => b[1].percentage - a[1].percentage)[0];
+        findings.push({
+            title: `📋 "${worst[0]}" has the most missing values (${worst[1].percentage}%)`,
+            text: `${worst[1].count} values are missing in this column. Consider imputation using median (for numeric) or mode (for categorical) before analysis.`
+        });
+    }
+
+    if (findings.length === 0) {
+        findings.push({
+            title: '✅ Your dataset looks clean!',
+            text: 'No major issues or notable patterns were detected. The data is complete and well-structured.'
+        });
+    }
+
+    container.innerHTML = findings.map((f, i) => `
+        <div class="finding-item">
+            <div class="finding-rank">${i + 1}</div>
+            <div class="finding-content">
+                <h4>${f.title}</h4>
+                <p>${f.text}</p>
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('findings-section').style.display = 'block';
+}
+
+// ─── Stats Cards (Enhanced) ───
+function renderStatsCards(results) {
+    const container = document.getElementById('stats-cards');
+    const stats = results.descriptive_stats || {};
+    const shape = stats.shape || {};
+    const missing = results.missing_data || {};
+    const outliers = results.outliers?.isolation_forest || {};
+
+    const completeness = missing.completeness || 100;
+    let qLabel, qClass;
+    if (completeness >= 98) { qLabel = 'Excellent'; qClass = 'excellent'; }
+    else if (completeness >= 90) { qLabel = 'Good'; qClass = 'good'; }
+    else if (completeness >= 75) { qLabel = 'Fair'; qClass = 'warning'; }
+    else { qLabel = 'Poor'; qClass = 'danger'; }
+
+    const outlierCount = outliers.total_outliers || 0;
+    let oLabel, oClass;
+    if (outlierCount === 0) { oLabel = 'Clean'; oClass = 'excellent'; }
+    else if ((outliers.percentage || 0) < 5) { oLabel = 'Normal'; oClass = 'good'; }
+    else if ((outliers.percentage || 0) < 15) { oLabel = 'Review'; oClass = 'warning'; }
+    else { oLabel = 'High'; oClass = 'danger'; }
+
+    container.innerHTML = `
+        <div class="stat-card glass-card"><div class="stat-icon">📏</div><div class="stat-value animate">${(shape.rows||0).toLocaleString()}</div><div class="stat-label">Total Rows</div></div>
+        <div class="stat-card glass-card"><div class="stat-icon">📊</div><div class="stat-value animate">${shape.columns||0}</div><div class="stat-label">Columns</div></div>
+        <div class="stat-card glass-card"><div class="stat-icon">✅</div><div class="stat-value animate">${completeness}%</div><div class="stat-label">Data Quality</div><div class="stat-context ${qClass}">${qLabel}</div></div>
+        <div class="stat-card glass-card"><div class="stat-icon">⚠️</div><div class="stat-value animate">${outlierCount}</div><div class="stat-label">Outliers Found</div><div class="stat-context ${oClass}">${oLabel}</div></div>
+    `;
+    container.style.display = 'grid';
+}
+
+// ─── Numeric Statistics Table ───
+function renderNumericTable(results) {
+    const stats = results.descriptive_stats?.numeric;
+    if (!stats || Object.keys(stats).length === 0) return;
+
+    const tbody = document.getElementById('numeric-table-body');
+    // Find global max range for normalization
+    let globalMax = 0;
+    Object.values(stats).forEach(s => {
+        if (typeof s === 'object') {
+            const range = (s.max || 0) - (s.min || 0);
+            if (range > globalMax) globalMax = range;
+        }
+    });
+
+    let html = '';
+    Object.entries(stats).forEach(([col, s]) => {
+        if (typeof s !== 'object') return;
+        const mean = s.mean ?? 0;
+        const median = s['50%'] ?? s.median ?? 0;
+        const std = s.std ?? 0;
+        const mn = s.min ?? 0;
+        const mx = s.max ?? 0;
+        const range = mx - mn;
+        const pct = globalMax > 0 ? (range / globalMax * 100).toFixed(1) : 0;
+
+        html += `<tr>
+            <td>${col}</td>
+            <td>${Number(mean).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+            <td>${Number(median).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+            <td>${Number(std).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+            <td>${Number(mn).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+            <td>${Number(mx).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+            <td class="range-bar-cell">
+                ${Number(range).toLocaleString(undefined, {maximumFractionDigits:2})}
+                <div class="range-bar"><div class="range-bar-fill" style="width:${pct}%"></div></div>
+            </td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+    document.getElementById('numeric-stats-section').style.display = 'block';
+}
+
+// ─── Scatter Plot ───
+function renderScatterPlot(charts) {
+    const section = document.getElementById('scatter-section');
+    const select = document.getElementById('scatter-select');
+    const scatterData = charts.scatter_plots;
+    if (!scatterData || Object.keys(scatterData).length === 0) return;
+    section.style.display = 'block';
+    select.innerHTML = Object.keys(scatterData).map(k => {
+        const d = scatterData[k];
+        return `<option value="${k}">${d.x_label} vs ${d.y_label} (r=${d.correlation})</option>`;
+    }).join('');
+    window._scatterData = scatterData;
+    updateScatterPlot();
+}
+function updateScatterPlot() {
+    const key = document.getElementById('scatter-select').value;
+    const d = window._scatterData[key];
+    if (!d) return;
+    const ctx = document.getElementById('scatter-chart').getContext('2d');
+    if (window._scatterInst) window._scatterInst.destroy();
+    window._scatterInst = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets: [{
+            label: `${d.x_label} vs ${d.y_label}`,
+            data: d.x.map((x,i) => ({x, y: d.y[i]})),
+            backgroundColor: 'rgba(124,92,252,0.5)',
+            borderColor: 'rgba(124,92,252,0.8)',
+            pointRadius: 3,
+        }]},
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e2e8f0' } } },
+            scales: {
+                x: { title: { display: true, text: d.x_label, color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+                y: { title: { display: true, text: d.y_label, color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+            }
+        }
+    });
+}
+
+// ─── Heatmap ───
+function renderHeatmap(charts, results) {
+    const section = document.getElementById('correlation-section');
+    const heatmap = charts.correlation_heatmap;
+    if (!heatmap) return;
+    section.style.display = 'block';
+
+    const labels = heatmap.labels;
+    const data = heatmap.data;
+    let html = '<table class="heatmap-table"><thead><tr><th></th>';
+    labels.forEach(l => html += `<th>${l}</th>`);
+    html += '</tr></thead><tbody>';
+    labels.forEach((r, i) => {
+        html += `<tr><th>${r}</th>`;
+        labels.forEach((_, j) => {
+            const val = data[i][j];
+            const abs = Math.abs(val);
+            const hue = val >= 0 ? 250 : 330;
+            const alpha = Math.min(abs, 1);
+            const bg = `hsla(${hue},70%,60%,${alpha * 0.6})`;
+            const txtColor = abs > 0.5 ? '#fff' : '#94a3b8';
+            html += `<td style="background:${bg};color:${txtColor};font-weight:${abs>0.5?'700':'400'}">${val.toFixed(2)}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('heatmap-container').innerHTML = html;
+
+    const topCorrs = results.correlation?.top_correlations || [];
+    let corrHtml = '<div class="corr-table"><table><thead><tr><th>Variable 1</th><th>Variable 2</th><th>Correlation</th><th>Strength</th></tr></thead><tbody>';
+    topCorrs.forEach(c => {
+        const color = c.value > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+        corrHtml += `<tr><td>${c.col1}</td><td>${c.col2}</td><td style="color:${color};font-weight:700">${c.value}</td><td>${c.strength}</td></tr>`;
+    });
+    corrHtml += '</tbody></table></div>';
+    document.getElementById('top-correlations').innerHTML = corrHtml;
+}
+
+// ─── Box Plots ───
+function renderBoxPlots(charts) {
+    const section = document.getElementById('box-section');
+    const container = document.getElementById('box-container');
+    const boxData = charts.box_plots;
+    if (!boxData || Object.keys(boxData).length === 0) return;
+    section.style.display = 'block';
+
+    let html = '';
+    Object.entries(boxData).forEach(([col, d]) => {
+        const range = d.max - d.min || 1;
+        const q1Pct = ((d.Q1 - d.min) / range * 100).toFixed(1);
+        const q3Pct = ((d.Q3 - d.min) / range * 100).toFixed(1);
+        const medPct = ((d.median - d.min) / range * 100).toFixed(1);
+        const iqrWidth = (q3Pct - q1Pct).toFixed(1);
+        html += `
+        <div class="box-card">
+            <h4>${col}</h4>
+            <div class="box-bar-container">
+                <div class="box-bar" style="left:${q1Pct}%;width:${iqrWidth}%"></div>
+                <div class="box-bar-median" style="left:${medPct}%"></div>
+            </div>
+            <div class="stat-row"><span>Min</span><span class="val">${d.min}</span></div>
+            <div class="stat-row"><span>Q1</span><span class="val">${d.Q1}</span></div>
+            <div class="stat-row"><span>Median</span><span class="val">${d.median}</span></div>
+            <div class="stat-row"><span>Q3</span><span class="val">${d.Q3}</span></div>
+            <div class="stat-row"><span>Max</span><span class="val">${d.max}</span></div>
+            <div class="stat-row"><span>Outliers</span><span class="val" style="color:#f472b6">${d.outlier_count}</span></div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+// ─── Distribution ───
+function renderDistributionCharts(charts) {
+    const section = document.getElementById('distribution-section');
+    const select = document.getElementById('dist-column-select');
+    const distCharts = Object.keys(charts).filter(k => k.startsWith('distribution_'));
+    if (distCharts.length === 0) return;
+    section.style.display = 'block';
+    select.innerHTML = distCharts.map(k => `<option value="${k}">${k.replace('distribution_','')}</option>`).join('');
+    window._distCharts = charts;
+    updateDistChart();
+}
+function updateDistChart() {
+    const key = document.getElementById('dist-column-select').value;
+    const chartData = window._distCharts[key]; if (!chartData) return;
+    const ctx = document.getElementById('distribution-chart').getContext('2d');
+    if (window._distChartInstance) window._distChartInstance.destroy();
+    window._distChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: chartData.labels, datasets: [{ label: chartData.label, data: chartData.data,
+            backgroundColor: 'rgba(124,92,252,0.6)', borderColor: 'rgba(124,92,252,1)', borderWidth: 1, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e2e8f0' } } },
+            scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } } }
+        }
+    });
+}
+
+// ─── Trends ───
+function renderTrendCharts(charts) {
+    const section = document.getElementById('trend-section');
+    const select = document.getElementById('trend-column-select');
+    const trendCharts = Object.keys(charts).filter(k => k.startsWith('trend_'));
+    if (trendCharts.length === 0) return;
+    section.style.display = 'block';
+    select.innerHTML = trendCharts.map(k => `<option value="${k}">${k.replace('trend_','')}</option>`).join('');
+    window._trendCharts = charts;
+    updateTrendChart();
+}
+function updateTrendChart() {
+    const key = document.getElementById('trend-column-select').value;
+    const chartData = window._trendCharts[key]; if (!chartData) return;
+    const ctx = document.getElementById('trend-chart').getContext('2d');
+    if (window._trendChartInstance) window._trendChartInstance.destroy();
+    const clrs = ['rgba(124,92,252,1)', 'rgba(244,114,182,1)'];
+    const bg = ['rgba(124,92,252,0.1)', 'rgba(244,114,182,0.1)'];
+    window._trendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels: chartData.labels, datasets: chartData.datasets.map((ds,i) => ({
+            ...ds, borderColor: clrs[i], backgroundColor: bg[i], fill: i===0, tension: 0.3, pointRadius: 2 })) },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e2e8f0' } } },
+            scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } } }
+        }
+    });
+}
+
+// ─── Outliers (Enhanced) ───
+function renderOutlierDetails(results) {
+    const section = document.getElementById('outlier-section');
+    const container = document.getElementById('outlier-details');
+    const outliers = results.outliers?.iqr_method || {};
+    if (Object.keys(outliers).length === 0) return;
+    section.style.display = 'block';
+    let html = '';
+    Object.entries(outliers).forEach(([col, info]) => {
+        if (typeof info !== 'object' || !info.count) return;
+        const severity = info.percentage > 10 ? 'high' : info.percentage > 5 ? 'medium' : 'low';
+        const barWidth = Math.min(info.percentage * 2, 100);
+        html += `<div class="outlier-card glass-card severity-${severity}"><h4>${col}</h4>
+            <div class="outlier-stat">${info.count} outliers (${info.percentage}%)</div>
+            <div class="outlier-range">IQR bounds: [${info.lower_bound.toFixed(1)}, ${info.upper_bound.toFixed(1)}]</div>
+            <div class="severity-bar"><div class="severity-fill" style="width:${barWidth}%"></div></div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+// ─── Missing Data ───
+function renderMissingDataChart(results) {
+    const section = document.getElementById('missing-section');
+    const missing = results.missing_data?.columns_with_missing || {};
+    if (Object.keys(missing).length === 0) return;
+    section.style.display = 'block';
+    new Chart(document.getElementById('missing-chart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: Object.keys(missing), datasets: [{ label: 'Missing Values (%)',
+            data: Object.values(missing).map(v => v.percentage),
+            backgroundColor: 'rgba(251,146,60,0.6)', borderColor: 'rgba(251,146,60,1)', borderWidth: 1, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            plugins: { legend: { labels: { color: '#e2e8f0' } } },
+            scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } } }
+        }
+    });
+}
+
+// ─── Matplotlib Plots Gallery ───
+const PLOT_LABELS = {
+    line_plot: 'Line Plot — Trends',
+    histograms: 'Histograms — Distributions',
+    area_plot: 'Area Plot — Cumulative Trends',
+    box_plots: 'Box Plots — Spread & Outliers',
+    scatter_plots: 'Scatter Plots — Relationships',
+    heatmap: 'Correlation Heatmap',
+    bar_chart: 'Bar Chart — Category Comparison',
+    horizontal_bar: 'Horizontal Bar Chart',
+    stacked_bar: 'Stacked Bar Chart',
+    pie_charts: 'Pie Charts — Proportions',
+    dashboard_subplots: 'Dashboard — Full Overview',
+};
+
+function renderMatplotlibPlots(plots) {
+    const section = document.getElementById('matplotlib-section');
+    const grid = document.getElementById('matplotlib-plots-grid');
+    const countEl = document.getElementById('matplotlib-plot-count');
+
+    if (plots._error) {
+        grid.innerHTML = `<div class="mpl-plot-error">Plot generation error: ${plots._error}</div>`;
+        section.style.display = 'block';
+        return;
+    }
+
+    const entries = Object.entries(plots).filter(([k]) => k !== '_error');
+    if (entries.length === 0) return;
+
+    countEl.textContent = `${entries.length} plots generated`;
+    grid.innerHTML = entries.map(([key, url]) => `
+        <div class="mpl-plot-card" onclick="openLightbox('${url}', '${PLOT_LABELS[key] || key}')">
+            <img src="${url}?t=${Date.now()}" alt="${PLOT_LABELS[key] || key}" loading="lazy" />
+            <div class="mpl-plot-label">${PLOT_LABELS[key] || key.replace(/_/g,' ')}</div>
+        </div>
+    `).join('');
+    section.style.display = 'block';
+}
+
+function openLightbox(url, caption) {
+    const lb = document.getElementById('plot-lightbox');
+    document.getElementById('lightbox-img').src = url;
+    document.getElementById('lightbox-caption').textContent = caption;
+    lb.style.display = 'flex';
+}
+function closeLightbox() {
+    document.getElementById('plot-lightbox').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
+}
+</script>
+{% endblock %}

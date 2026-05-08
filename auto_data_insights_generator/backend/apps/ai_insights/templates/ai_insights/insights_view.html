@@ -1,0 +1,755 @@
+{% extends 'base.html' %}
+{% block title %}AI Chat - {{ dataset.name }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div class="header-left">
+            <a href="{% url 'data_upload:upload' %}" class="btn btn-ghost">&#8592; Back</a>
+            <div>
+                <h1>&#129302; AI Data Analyst</h1>
+                <p>{{ dataset.name }} &mdash; PyTorch-powered intelligent assistant</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="generate-btn" class="btn btn-primary" onclick="generateInsights()">
+                &#10024; Generate Insights
+            </button>
+            <a href="{% url 'data_analysis:dashboard' dataset.id %}" class="btn btn-secondary">&#128202; Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display:none;">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>AI is analyzing your data...</p>
+        </div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div class="chat-layout">
+        <!-- Chat Panel -->
+        <div class="chat-panel glass-card">
+            <div class="chat-header">
+                <div class="chat-status">
+                    <span class="status-dot"></span>
+                    <span>PyTorch NLP Engine</span>
+                </div>
+                <div id="context-badge" class="context-badge" style="display:none;">
+                    <span id="context-count">0</span> turns in memory
+                </div>
+            </div>
+
+            <div id="chat-messages" class="chat-messages">
+                <div class="bot-message message-bubble">
+                    <div class="message-avatar">&#129302;</div>
+                    <div class="message-content">
+                        <p>Hello! I'm your <strong>AI Data Analyst</strong> powered by PyTorch.</p>
+                        <p>I've loaded <strong>{{ dataset.name }}</strong> and I'm ready to answer your questions about trends, correlations, outliers, and more.</p>
+                        <p>Try one of the suggestions below, or type your own question!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing indicator -->
+            <div id="typing-indicator" class="typing-indicator" style="display:none;">
+                <div class="message-avatar">&#129302;</div>
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+
+            <!-- Suggested chips -->
+            <div class="suggestion-chips" id="suggestion-chips">
+                <button onclick="askSuggestion('Give me an overview')">Overview</button>
+                <button onclick="askSuggestion('What are the correlations?')">Correlations</button>
+                <button onclick="askSuggestion('Show me the trends')">Trends</button>
+                <button onclick="askSuggestion('Are there any outliers?')">Outliers</button>
+                <button onclick="askSuggestion('Show me the statistics')">Statistics</button>
+                <button onclick="askSuggestion('What is the data quality?')">Data Quality</button>
+                <button onclick="askSuggestion('List the columns')">Columns</button>
+                <button onclick="askSuggestion('Show sample data')">Sample Data</button>
+                <button onclick="askSuggestion('Any recommendations?')">Recommendations</button>
+            </div>
+
+            <!-- Input area -->
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" class="form-control" placeholder="Ask about your data... e.g. &quot;Why is revenue decreasing?&quot;" autocomplete="off" />
+                <button id="send-btn" class="btn btn-primary" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Insights Panel -->
+        <div class="insights-panel">
+            <div class="glass-card insights-sidebar">
+                <h3>&#128161; Generated Insights</h3>
+                <div id="insights-container">
+                    {% for insight in insights %}
+                    <div class="insight-mini category-{{ insight.category }}">
+                        <div class="insight-mini-header">
+                            <span class="insight-cat-badge">{{ insight.get_category_display }}</span>
+                            <span class="insight-conf">{{ insight.confidence|floatformat:0 }}%</span>
+                        </div>
+                        <h4>{{ insight.title }}</h4>
+                        <p>{{ insight.insight_text|truncatewords:30 }}</p>
+                    </div>
+                    {% empty %}
+                    <div class="empty-mini">
+                        <p>Click "Generate Insights" to analyze your data</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Chat layout */
+.chat-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+@media (max-width: 1024px) {
+    .chat-layout { grid-template-columns: 1fr; }
+    .insights-panel { order: -1; }
+}
+
+/* Chat panel */
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 600px;
+    max-height: 78vh;
+    overflow: hidden;
+}
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(99,102,241,0.15);
+}
+.chat-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+.status-dot {
+    width: 8px; height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(34,197,94,0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+.context-badge {
+    font-size: 0.75rem;
+    background: rgba(99,102,241,0.15);
+    color: #a78bfa;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(99,102,241,0.3);
+}
+
+/* Messages */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.message-bubble {
+    display: flex;
+    gap: 12px;
+    max-width: 88%;
+    animation: fadeSlideIn 0.3s ease forwards;
+}
+@keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.bot-message { align-self: flex-start; }
+.user-message { align-self: flex-end; flex-direction: row-reverse; }
+.message-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.3);
+}
+.user-message .message-avatar {
+    background: rgba(124,92,252,0.2);
+    border-color: rgba(124,92,252,0.4);
+}
+.message-content {
+    background: rgba(30,30,60,0.6);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 16px;
+    border-top-left-radius: 4px;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+}
+.user-message .message-content {
+    background: rgba(99,102,241,0.15);
+    border-color: rgba(99,102,241,0.3);
+    border-top-right-radius: 4px;
+    border-top-left-radius: 16px;
+}
+.message-content p { margin: 0 0 8px; }
+.message-content p:last-child { margin-bottom: 0; }
+.message-content strong { color: #c4b5fd; }
+.message-content code {
+    background: rgba(139,92,246,0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.message-meta {
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 6px;
+    text-align: right;
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    gap: 12px;
+    padding: 0 18px 10px;
+    align-items: center;
+}
+.typing-dots {
+    display: flex;
+    gap: 5px;
+    padding: 12px 16px;
+    background: rgba(30,30,60,0.6);
+    border-radius: 16px;
+    border-top-left-radius: 4px;
+}
+.typing-dots span {
+    width: 8px; height: 8px;
+    background: #6366f1;
+    border-radius: 50%;
+    animation: typingBounce 1.4s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* Suggestion chips */
+.suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 18px;
+    border-top: 1px solid rgba(99,102,241,0.1);
+}
+.suggestion-chips button {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.25);
+    color: #a78bfa;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.suggestion-chips button:hover {
+    background: rgba(99,102,241,0.25);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+}
+
+/* Input area */
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid rgba(99,102,241,0.15);
+    background: rgba(15,15,30,0.4);
+}
+.chat-input-area .form-control {
+    flex: 1;
+    border-radius: 12px;
+}
+.chat-input-area .btn {
+    border-radius: 12px;
+    padding: 10px 24px;
+}
+
+/* Insights sidebar */
+.insights-sidebar {
+    max-height: 78vh;
+    overflow-y: auto;
+}
+.insights-sidebar h3 {
+    margin: 0 0 16px;
+    font-size: 1rem;
+}
+.insight-mini {
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    transition: transform 0.2s ease;
+}
+.insight-mini:hover { transform: translateY(-2px); }
+.insight-mini-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.insight-cat-badge {
+    font-size: 0.7rem;
+    background: rgba(99,102,241,0.2);
+    color: #a78bfa;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.insight-conf {
+    font-size: 0.7rem;
+    color: #64748b;
+}
+.insight-mini h4 {
+    margin: 0 0 4px;
+    font-size: 0.82rem;
+    color: #c4b5fd;
+}
+.insight-mini p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+.empty-mini {
+    text-align: center;
+    color: #64748b;
+    padding: 2rem 1rem;
+    font-size: 0.85rem;
+}
+
+/* Tables in chat messages */
+.message-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 0.82rem;
+}
+.message-content th {
+    background: rgba(99,102,241,0.2);
+    color: #c4b5fd;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 2px solid rgba(99,102,241,0.3);
+    font-weight: 600;
+}
+.message-content td {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(99,102,241,0.1);
+    color: #e2e8f0;
+}
+.message-content tr:hover td {
+    background: rgba(99,102,241,0.06);
+}
+
+/* Dynamic action buttons in chat */
+.chat-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.chat-actions button {
+    background: rgba(124,92,252,0.12);
+    border: 1px solid rgba(124,92,252,0.3);
+    color: #c4b5fd;
+    padding: 5px 12px;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.chat-actions button:hover {
+    background: rgba(124,92,252,0.25);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(124,92,252,0.2);
+}
+
+/* Focus column badge */
+.focus-badge {
+    font-size: 0.7rem;
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(34,197,94,0.3);
+    margin-left: 8px;
+}
+
+/* Typewriter cursor blink */
+.typewriter-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: #c4b5fd;
+    margin-left: 2px;
+    animation: blink-cursor 0.7s step-end infinite;
+    vertical-align: text-bottom;
+}
+@keyframes blink-cursor {
+    50% { opacity: 0; }
+}
+</style>
+
+<script>
+const DATASET_ID = {{ dataset.id }};
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+// Load chat history on page load
+document.addEventListener('DOMContentLoaded', () => {
+    fetch(`/insights/${DATASET_ID}/chat/history/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success' && data.history.length > 0) {
+                data.history.forEach(msg => {
+                    if (msg.role === 'user') addUserBubble(msg.text);
+                    else addBotBubble(msg.text);
+                });
+                updateContextBadge(data.history.length / 2);
+            }
+        })
+        .catch(() => {});
+});
+
+// Enter key
+document.getElementById('chat-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+});
+
+function askSuggestion(text) {
+    document.getElementById('chat-input').value = text;
+    sendMessage();
+}
+
+function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const question = input.value.trim();
+    if (!question) return;
+    input.value = '';
+
+    addUserBubble(question);
+    showTyping(true);
+    scrollChat();
+
+    fetch(`/insights/${DATASET_ID}/query/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        showTyping(false);
+        if (data.status === 'success') {
+            addBotBubbleTyped(data.answer, data.intent, data.confidence, data.suggested_actions || [], data.focus_column);
+            updateContextBadge(data.context_turns);
+            if (data.suggested_actions && data.suggested_actions.length > 0) {
+                updateDynamicChips(data.suggested_actions);
+            }
+            if (data.focus_column) {
+                updateFocusBadge(data.focus_column);
+            }
+        } else {
+            addBotBubble('Sorry, something went wrong: ' + (data.message || 'Unknown error'));
+        }
+        scrollChat();
+    })
+    .catch(() => {
+        showTyping(false);
+        addBotBubble('Network error. Please try again.');
+        scrollChat();
+    });
+}
+
+function addUserBubble(text) {
+    const container = document.getElementById('chat-messages');
+    container.innerHTML += `
+        <div class="user-message message-bubble">
+            <div class="message-avatar">&#128100;</div>
+            <div class="message-content"><p>${escapeHtml(text)}</p></div>
+        </div>`;
+}
+
+function addBotBubble(text, intent, confidence) {
+    const container = document.getElementById('chat-messages');
+    const formatted = formatMarkdown(text);
+    let meta = '';
+    if (intent) {
+        const confPct = Math.round(confidence * 100);
+        meta = `<div class="message-meta">Intent: ${intent} &middot; Confidence: ${confPct}%</div>`;
+    }
+    container.innerHTML += `
+        <div class="bot-message message-bubble">
+            <div class="message-avatar">&#129302;</div>
+            <div class="message-content">${formatted}${meta}</div>
+        </div>`;
+}
+
+// Typewriter effect for bot responses
+function addBotBubbleTyped(text, intent, confidence, actions, focusCol) {
+    const container = document.getElementById('chat-messages');
+    const bubbleId = 'typed-' + Date.now();
+    let meta = '';
+    if (intent) {
+        const confPct = Math.round(confidence * 100);
+        meta = `<div class="message-meta">Intent: ${intent} &middot; Confidence: ${confPct}%</div>`;
+    }
+    let actionsHtml = '';
+    if (actions && actions.length > 0) {
+        actionsHtml = `<div class="chat-actions">${actions.map(a => `<button onclick="askSuggestion('${escapeHtml(a)}')">${escapeHtml(a)}</button>`).join('')}</div>`;
+    }
+
+    container.innerHTML += `
+        <div class="bot-message message-bubble">
+            <div class="message-avatar">&#129302;</div>
+            <div class="message-content">
+                <div id="${bubbleId}"></div>
+                <span class="typewriter-cursor" id="${bubbleId}-cursor"></span>
+                ${meta}${actionsHtml}
+            </div>
+        </div>`;
+    scrollChat();
+
+    // Stream the formatted text
+    const formatted = formatMarkdown(text);
+    const target = document.getElementById(bubbleId);
+    const cursor = document.getElementById(bubbleId + '-cursor');
+    typewriteHTML(target, formatted, cursor);
+}
+
+function typewriteHTML(el, html, cursor) {
+    // For complex HTML, use a chunk-based approach
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const textContent = tempDiv.textContent || tempDiv.innerText;
+
+    if (textContent.length > 300) {
+        // Long text: show in fast chunks
+        el.innerHTML = html;
+        if (cursor) cursor.remove();
+        scrollChat();
+        return;
+    }
+
+    let i = 0;
+    const chars = textContent;
+    const speed = Math.max(8, Math.min(25, 1500 / chars.length));
+
+    function type() {
+        if (i < chars.length) {
+            // Show progressively more of the full HTML
+            const ratio = (i + 1) / chars.length;
+            const htmlChars = Math.floor(html.length * ratio);
+            // Find a safe cut point (not inside a tag)
+            let cutPoint = htmlChars;
+            let inTag = false;
+            for (let j = cutPoint; j >= 0; j--) {
+                if (html[j] === '>') break;
+                if (html[j] === '<') { cutPoint = j; break; }
+            }
+            el.innerHTML = html.substring(0, cutPoint);
+            i += Math.max(1, Math.floor(chars.length / 60));
+            scrollChat();
+            setTimeout(type, speed);
+        } else {
+            el.innerHTML = html;
+            if (cursor) cursor.remove();
+            scrollChat();
+        }
+    }
+    type();
+}
+
+function showTyping(show) {
+    document.getElementById('typing-indicator').style.display = show ? 'flex' : 'none';
+}
+
+function scrollChat() {
+    const el = document.getElementById('chat-messages');
+    setTimeout(() => { el.scrollTop = el.scrollHeight; }, 50);
+}
+
+function updateContextBadge(turns) {
+    const badge = document.getElementById('context-badge');
+    if (turns > 0) {
+        document.getElementById('context-count').textContent = turns;
+        badge.style.display = 'inline-block';
+    }
+}
+
+function updateFocusBadge(col) {
+    let badge = document.getElementById('focus-col-badge');
+    if (!badge) {
+        const header = document.querySelector('.chat-header');
+        badge = document.createElement('span');
+        badge.id = 'focus-col-badge';
+        badge.className = 'focus-badge';
+        header.appendChild(badge);
+    }
+    badge.textContent = '\u{1F3AF} ' + col;
+    badge.style.display = 'inline-block';
+}
+
+function updateDynamicChips(actions) {
+    const chips = document.getElementById('suggestion-chips');
+    chips.innerHTML = actions.map(a =>
+        `<button onclick="askSuggestion('${escapeHtml(a)}')">${escapeHtml(a)}</button>`
+    ).join('');
+}
+
+function formatMarkdown(text) {
+    let escaped = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Detect and render markdown tables
+    const lines = escaped.split('\n');
+    let result = [];
+    let inTable = false;
+    let tableRows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('|') && line.endsWith('|')) {
+            // Check if it's a separator row
+            if (/^\|[\s\-:|]+\|$/.test(line)) {
+                continue; // skip separator
+            }
+            if (!inTable) { inTable = true; tableRows = []; }
+            const cells = line.split('|').filter(c => c.trim() !== '');
+            tableRows.push(cells.map(c => c.trim()));
+        } else {
+            if (inTable) {
+                result.push(renderTable(tableRows));
+                inTable = false;
+                tableRows = [];
+            }
+            result.push(line);
+        }
+    }
+    if (inTable) { result.push(renderTable(tableRows)); }
+
+    let html = result.join('\n');
+
+    // Standard markdown formatting
+    html = html
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/^(\d+)\.\s/gm, '<strong>$1.</strong> ')
+        .replace(/^- /gm, '&bull; ')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+        .replace(/^(.*)$/, '<p>$1</p>');
+
+    return html;
+}
+
+function renderTable(rows) {
+    if (rows.length === 0) return '';
+    let html = '<table>';
+    // First row as header
+    html += '<thead><tr>' + rows[0].map(c =>
+        `<th>${c.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</th>`
+    ).join('') + '</tr></thead>';
+    // Remaining as body
+    if (rows.length > 1) {
+        html += '<tbody>';
+        for (let i = 1; i < rows.length; i++) {
+            html += '<tr>' + rows[i].map(c =>
+                `<td>${c.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</td>`
+            ).join('') + '</tr>';
+        }
+        html += '</tbody>';
+    }
+    html += '</table>';
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Insights generation
+function generateInsights() {
+    const btn = document.getElementById('generate-btn');
+    const loading = document.getElementById('loading-overlay');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    loading.style.display = 'flex';
+
+    fetch(`/insights/${DATASET_ID}/generate/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '&#10024; Generate Insights';
+        if (data.status === 'success') renderInsightsSidebar(data.insights);
+        else showToast('Error: ' + (data.message || 'Failed'), 'error');
+    })
+    .catch(() => {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '&#10024; Generate Insights';
+        showToast('Network error.', 'error');
+    });
+}
+
+function renderInsightsSidebar(insights) {
+    document.getElementById('insights-container').innerHTML = insights.map(ins => `
+        <div class="insight-mini category-${ins.category}">
+            <div class="insight-mini-header">
+                <span class="insight-cat-badge">${ins.category}</span>
+                <span class="insight-conf">${Math.round(ins.confidence * 100)}%</span>
+            </div>
+            <h4>${ins.title}</h4>
+            <p>${ins.insight_text.substring(0, 120)}...</p>
+        </div>
+    `).join('');
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
+}
+</script>
+{% endblock %}
+

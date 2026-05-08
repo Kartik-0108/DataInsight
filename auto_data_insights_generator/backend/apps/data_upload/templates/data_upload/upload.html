@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Upload Dataset{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1>📁 Upload Dataset</h1>
+        <p>Upload your CSV or Excel files for automated analysis</p>
+    </div>
+
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="upload-section glass-card">
+        <form method="post" enctype="multipart/form-data" id="upload-form">
+            {% csrf_token %}
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">📂</div>
+                    <h3>Drag & Drop your file here</h3>
+                    <p>or click to browse</p>
+                    <p class="drop-subtitle">Supports CSV, XLS, XLSX (max 50MB)</p>
+                </div>
+                <input type="file" name="dataset_file" id="dataset-file" accept=".csv,.xlsx,.xls" class="drop-input" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Dataset Name</label>
+                    <input type="text" id="name" name="name" class="form-control" placeholder="e.g., Q3 Sales Report">
+                </div>
+                <div class="form-group">
+                    <label for="description">Description (optional)</label>
+                    <input type="text" id="description" name="description" class="form-control" placeholder="Brief description of the dataset">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="upload-btn">
+                <i class="icon">⬆️</i> Upload & Process
+            </button>
+        </form>
+    </div>
+
+    {% if datasets %}
+    <div class="datasets-section">
+        <h2>📊 Your Datasets</h2>
+        <div class="datasets-grid">
+            {% for dataset in datasets %}
+            <div class="dataset-card glass-card" data-id="{{ dataset.id }}">
+                <div class="dataset-header">
+                    <span class="dataset-type-badge {{ dataset.file_type }}">{{ dataset.file_type|upper }}</span>
+                    <span class="dataset-status {{ dataset.status }}">{{ dataset.get_status_display }}</span>
+                </div>
+                <h3>{{ dataset.name }}</h3>
+                {% if dataset.description %}
+                <p class="dataset-desc">{{ dataset.description }}</p>
+                {% endif %}
+                <div class="dataset-meta">
+                    <span>📏 {{ dataset.row_count }} rows × {{ dataset.column_count }} cols</span>
+                    <span>📦 {{ dataset.file_size_display }}</span>
+                    <span>📅 {{ dataset.uploaded_at|date:"M d, Y" }}</span>
+                </div>
+                <div class="dataset-actions">
+                    <a href="{% url 'data_analysis:dashboard' dataset.id %}" class="btn btn-sm btn-primary">📊 Analyze</a>
+                    <a href="{% url 'ai_insights:insights' dataset.id %}" class="btn btn-sm btn-secondary">🤖 Insights</a>
+                    <form method="post" action="{% url 'data_upload:dataset_delete' dataset.id %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this dataset?')">🗑️</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

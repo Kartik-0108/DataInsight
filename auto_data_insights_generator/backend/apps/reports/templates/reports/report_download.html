@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Reports - {{ dataset.name }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div class="header-left">
+            <a href="{% url 'data_upload:upload' %}" class="btn btn-ghost">← Back</a>
+            <div>
+                <h1>📄 Report Generation</h1>
+                <p>{{ dataset.name }} — Download professional analysis reports</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'data_analysis:dashboard' dataset.id %}" class="btn btn-secondary">📊 Dashboard</a>
+            <a href="{% url 'ai_insights:insights' dataset.id %}" class="btn btn-secondary">🤖 Insights</a>
+        </div>
+    </div>
+
+    <!-- Generate Report -->
+    <div class="glass-card report-generate-card">
+        <div class="report-icon">📄</div>
+        <h2>Generate PDF Report</h2>
+        <p>Create a comprehensive report with analysis results, statistics, visualizations, and AI-powered insights.</p>
+        <div class="report-features">
+            <span class="feature-badge">📊 Statistics</span>
+            <span class="feature-badge">🔗 Correlations</span>
+            <span class="feature-badge">⚠️ Outliers</span>
+            <span class="feature-badge">📈 Trends</span>
+            <span class="feature-badge">🤖 AI Insights</span>
+        </div>
+        <button id="generate-btn" class="btn btn-primary btn-lg" onclick="generateReport()">
+            📥 Generate & Download Report
+        </button>
+        <div id="generate-status" class="generate-status" style="display:none;"></div>
+    </div>
+
+    <!-- Previous Reports -->
+    {% if reports %}
+    <div class="reports-section">
+        <h2>📁 Previous Reports</h2>
+        <div class="reports-list">
+            {% for report in reports %}
+            <div class="report-item glass-card">
+                <div class="report-info">
+                    <h3>{{ report.title }}</h3>
+                    <div class="report-meta">
+                        <span>📄 {{ report.format|upper }}</span>
+                        <span>📦 {{ report.file_size_display }}</span>
+                        <span>📅 {{ report.created_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'reports:download' dataset.id %}" class="btn btn-primary btn-sm">📥 Download</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const DATASET_ID = {{ dataset.id }};
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+function generateReport() {
+    const btn = document.getElementById('generate-btn');
+    const status = document.getElementById('generate-status');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Generating Report...';
+    status.style.display = 'block';
+    status.innerHTML = '<div class="spinner-small"></div> Creating your report...';
+    status.className = 'generate-status generating';
+
+    fetch(`/reports/${DATASET_ID}/create/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '📥 Generate & Download Report';
+
+        if (data.status === 'success') {
+            status.innerHTML = `✅ Report generated successfully! (${data.file_size}) <a href="${data.download_url}" class="btn btn-primary btn-sm">📥 Download Now</a>`;
+            status.className = 'generate-status success';
+            // Auto-download
+            window.location.href = data.download_url;
+        } else {
+            status.innerHTML = `❌ ${data.message}`;
+            status.className = 'generate-status error';
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '📥 Generate & Download Report';
+        status.innerHTML = '❌ Network error. Please try again.';
+        status.className = 'generate-status error';
+    });
+}
+</script>
+{% endblock %}

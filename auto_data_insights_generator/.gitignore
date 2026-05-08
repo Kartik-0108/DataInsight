@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.venv/
+env.bak/
+venv.bak/
+
+# Environment Variables
+.env
+# Note: .env.production is kept as a template, but make sure not to commit real secrets in it!
+
+# Django stuff
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+*.log
+
+# Data Processing / Jupyter
+*.ipynb_checkpoints/
+data/uploaded_datasets/*
+data/processed_data/*
+!data/uploaded_datasets/.gitkeep
+!data/processed_data/.gitkeep
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

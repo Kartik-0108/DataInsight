@@ -1,0 +1,49 @@
+services:
+  # ─── PostgreSQL Database ───
+  - type: pserv
+    name: datainsights-db
+    plan: free
+    env: docker
+    dockerfilePath: ""
+    repo: ""
+    autoDeploy: false
+
+databases:
+  - name: datainsights-db
+    databaseName: datainsights
+    plan: free
+    region: oregon
+
+services:
+  # ─── Django Backend ───
+  - type: web
+    name: datainsights-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: "./render_build.sh"
+    startCommand: "cd backend && gunicorn auto_data_insights_generator.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: datainsights-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://datainsights-backend.onrender.com"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://your-frontend.vercel.app"
+      - key: STATIC_URL_CDN
+        value: "https://your-frontend.vercel.app"
+      - key: OLLAMA_URL
+        value: ""
+      - key: OLLAMA_MODEL
+        value: "tinyllama"
