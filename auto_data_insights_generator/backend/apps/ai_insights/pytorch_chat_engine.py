@@ -4,9 +4,16 @@ LSTM-based intent classifier with hybrid response generation.
 """
 import os, json, re, hashlib, collections, difflib
 import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import Dataset, DataLoader
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+    nn = None
 
 try:
     from nltk.stem.porter import PorterStemmer
@@ -712,6 +719,8 @@ _chatbot_instance = None
 
 def get_chatbot():
     global _chatbot_instance
+    if not TORCH_AVAILABLE:
+        return None
     if _chatbot_instance is None:
         _chatbot_instance = DataAnalystChatBot()
     return _chatbot_instance

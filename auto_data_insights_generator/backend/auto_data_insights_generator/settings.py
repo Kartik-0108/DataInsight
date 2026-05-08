@@ -97,11 +97,11 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    BASE_DIR.parent / 'frontend' / 'src',
-    BASE_DIR.parent / 'frontend' / 'public',
-]
+_frontend_src = BASE_DIR.parent / 'frontend' / 'src'
+_frontend_pub = BASE_DIR.parent / 'frontend' / 'public'
+STATICFILES_DIRS = [d for d in [_frontend_src, _frontend_pub] if d.exists()]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (user uploads)
 MEDIA_URL = '/media/'

@@ -113,6 +113,11 @@ def smart_query(request, dataset_id):
         # Use PyTorch chatbot
         from .pytorch_chat_engine import get_chatbot
         chatbot = get_chatbot()
+        if chatbot is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The AI chatbot requires PyTorch which is not installed on this server. The analysis and insights features still work fully.'
+            }, status=503)
         session_id = f"{request.session.session_key or 'anon'}_{dataset_id}"
         result = chatbot.chat(question, analysis.results, dataset.name, session_id)
 

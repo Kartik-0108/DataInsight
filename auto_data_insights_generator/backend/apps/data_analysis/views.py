@@ -2,6 +2,7 @@ import pandas as pd
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 from apps.data_upload.models import UploadedDataset
 from .models import AnalysisResult
 from .analysis_engine import AnalysisEngine
@@ -22,11 +23,20 @@ def analysis_dashboard(request, dataset_id):
 
 
 @login_required
+@require_POST
 def run_analysis(request, dataset_id):
     """Run full analysis on a dataset and return results as JSON."""
     dataset = get_object_or_404(UploadedDataset, pk=dataset_id, user=request.user)
 
     try:
+        # Check if the uploaded file still exists on disk
+        import os
+        if not dataset.file or not os.path.exists(dataset.file.path):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Dataset file not found on the server. Please re-upload your file and try again. (Note: Render\'s free tier resets file storage on each deploy.)'
+            }, status=400)
+
         # Load the dataset
         if dataset.file_type == 'csv':
             df = pd.read_csv(dataset.file.path)
