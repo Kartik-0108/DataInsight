@@ -11,7 +11,7 @@ services:
     runtime: python
     region: oregon
     plan: free
-    rootDir: .
+    rootDir: auto_data_insights_generator
     buildCommand: "sed -i 's/\\r$//' render_build.sh && bash render_build.sh"
     startCommand: "cd backend && gunicorn auto_data_insights_generator.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
