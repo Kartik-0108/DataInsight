@@ -3,6 +3,7 @@
   "public": true,
   "cleanUrls": true,
   "trailingSlash": false,
+  "buildCommand": "echo 'Deploying static frontend only'",
   "outputDirectory": "frontend",
   "headers": [
     {
