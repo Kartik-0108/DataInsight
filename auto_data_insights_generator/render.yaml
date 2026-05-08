@@ -1,13 +1,3 @@
-services:
-  # ─── PostgreSQL Database ───
-  - type: pserv
-    name: datainsights-db
-    plan: free
-    env: docker
-    dockerfilePath: ""
-    repo: ""
-    autoDeploy: false
-
 databases:
   - name: datainsights-db
     databaseName: datainsights
