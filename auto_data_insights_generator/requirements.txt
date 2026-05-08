@@ -22,3 +22,6 @@ reportlab>=4.0
 
 # Utilities
 Pillow>=10.0
+
+# Deployment
+gunicorn>=21.2
