@@ -129,8 +129,21 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-# CORS settings (for development)
+# CORS settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+if not DEBUG:
+    _cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', '')
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+    # Also allow all onrender.com subdomains as a fallback
+    CORS_ALLOWED_ORIGIN_REGEXES = [r'^https://.*\.onrender\.com$']
+
+# CSRF settings for production
+_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = (
+    [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+    if _csrf_origins
+    else ['https://*.onrender.com', 'http://localhost:8000']
+)
 
 # AI Configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
